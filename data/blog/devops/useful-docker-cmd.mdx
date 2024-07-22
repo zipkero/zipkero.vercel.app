@@ -1,0 +1,139 @@
+---
+date: "2023-06-20"
+title: "docker command 정리"
+tags: ["docker"]
+summary: "도커 명령어와 관련 파일에 대한 사용법"
+---
+
+> 컨테이너 기반의 오픈소스 가상화 플랫폼으로 서버를 컨테이너로 추상화하여 동일한 인터페이스를 제공하여 배포 및 관리를 단순하게 해주는 역할
+
+- Docker는 실제 가상화 방식과 달리 게스트 운영체제를 설치하는 대신 호스트 운영체제를 기반으로 이미지화합니다.
+  프로세스를 일부 격리하지만 동일한 명령어가 있으면 컨테이너에서 실행하게 되며, 호스트 운영체제에서 실행되므로 호스트 운영체제의 프로세스 공간을 공유합니다.
+  이러한 특성 때문에 기본적으로 Linux 운영체제만 지원하며, Windows는 Hyper-V를 이용한 가상화를 사용.
+
+### 기본사용법
+
+1. Docker Image 다운 & 확인
+
+```bash
+docker pull <imageName>
+
+docker images
+```
+
+2. Docker 실행
+
+```bash
+docker run <옵션> <이미지 이름> <실행할 파일>
+
+#mariadb
+docker run --name testdb -p 3306:3306 -e MYSQL_ROOT_PASSWORD=<password> -d mariadb
+# -p : 컨테이너와 호스트의 포트를 연결한다.
+# -i : 컨테이너와의 입출력을 interactive하게 설정한다.
+# -t : 터미널 역할을 해주는 tty를 사용한다.
+# 위 -it 옵션을 주어야만 터미널 사용이 가능하다
+# -d 실행되는 컨터이너를 백그라운드로 실행하고 컨테이너 ID를 출력
+
+#redis
+docker run --name testredis -d -p 6379:6379 redis
+
+#mongo
+docker run --name testmongo -p 27017:27017 -d mongo
+```
+
+3. Docker Container 확인
+
+```bash
+docker container ls
+
+docker ps -a
+
+#docker container 정보 확인(ip 등등)
+docker inspect <containerName>
+```
+
+4. Docker Container 내부 명령 실행
+
+```bash
+docker exec <컨테이너 이름> <명령> <매개 변수>
+
+# bash 실행
+docker exec -it <containerName> bash
+
+#-i : 컨테이너와의 입출력을 interactive하게 설정한다.
+#-t : 터미널 역할을 해주는 tty를 사용한다.
+```
+
+5. 종료, 시작
+
+```bash
+docker start -a <containerName>
+docker restart <containerName>
+
+# stop은 진행되던 작업들을 완료하고 컨테이너를 중지하고 kill은 바로 중지시킨다.
+docker stop <containerName>
+docker kill <containerName>
+```
+
+6. 컨테이너 삭제
+
+```bash
+docker rm <containerName>
+docker rmi <containerName>
+# 이미지까지 삭제
+# -f 를 붙이게 되면 강제로 삭제 진행
+```
+
+### DockerFile
+
+> Docker 이미지를 만들 때 필요한 기본 환경 및 설정을 하기 위한 파일
+
+```
+FROM redis
+
+# 기본 디렉토리가 아닌 특정 디렉토리를 변경하기 위해 사용
+WORKDIR /usr/redis
+
+# 특정 파일을 복사하는 경우 사용
+COPY *.*
+
+# 설치 시점에 실행되어야 할 명령어가 있는 경우에 사용
+RUN echo "redis install"
+
+# 실행 시점에 실행되어야 할 명령어가 있는 경우에 사용
+CMD ["echo", "redis run"]
+```
+
+- Dockerfile을 기반으로 이미지를 생성하는 방법은 아래와 같습니다.
+
+```bash
+# docker build -t <imageName> <path>
+docker build -t zipkero/first-app ./
+
+# Dockerfile 의 명칭이 다른 경우 옵션을 통해 지정해주어야 한다.
+docker build -f Dockerfile.dev -t zipkero/first-app ./
+```
+
+### .dockerignore
+
+> docker image 생성 시 제외할 파일, 폴더를 지정할 때 사용되며 .gitignore 파일과 사용법은 동일
+
+- 사용법은 .gitignore와 동일
+
+### Docker-Compose
+
+> 여러 컨테이너의 실행과 의존성을 한번에 관리할 수 있는 yaml 포맷의 설정 파일
+
+```yaml
+version: "3"
+services:
+  db:
+    image: postgres
+    container_name: postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: "id"
+      POSTGRES_PASSWORD: "password"
+```

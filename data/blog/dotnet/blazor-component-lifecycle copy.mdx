@@ -1,0 +1,106 @@
+---
+date: "2023-09-14"
+title: Blazor Component Lifecycle
+tags: ["dotnet", "asp.net", "blazor"]
+draft: false
+summary: "Blazor Component Lifecycle 에 대한 정리"
+---
+
+Blazor 프레임워크는 컴포넌트가 생성되고 파괴될 때까지의 라이프사이클을 관리합니다.
+컴포넌트의 라이프사이클은 다음과 같습니다.
+
+## 1. SetParametersAsync
+
+컴포넌트에게 제공되는 모든 파라미터를 프로퍼티에 바인딩하는 구간이며 값을 할당하지는 않습니다.
+
+```csharp
+public override async Task SetParametersAsync(ParameterView parameters)
+{
+    Console.WriteLine("SetParametersAsync");
+    await base.SetParametersAsync(parameters);
+}
+```
+
+## 2. OnInitialized, OnInitializedAsync
+
+컴포넌트 초기화 단계에서 호출되며, 데이터나 컴포넌트 설정을 초기화합니다.
+
+```csharp
+protected override void OnInitialized()
+{
+    Console.WriteLine("OnInitialized");
+}
+protected override async Task OnInitializedAsync()
+{
+    Console.WriteLine("OnInitializedAsync");
+    await Task.CompletedTask;
+}
+```
+
+## 3. OnParametersSet, OnParametersSetAsync
+
+모든 컴포넌트 매개 변수가 설정된 후 호출되기 때문에, 매개 변수를 기반으로 추가 작업을 진행할 수 있습니다.
+
+```csharp
+protected override void OnParametersSet()
+{
+    Console.WriteLine("OnParametersSet");
+}
+
+protected override async Task OnParametersSetAsync()
+{
+    Console.WriteLine("OnParametersSetAsync");
+    await Task.CompletedTask;
+}
+```
+
+## 4. ShouldRender
+
+컴포넌트가 렌더링될 필요가 있는지 확인 후 결과를 반환합니다.
+
+```csharp
+protected override bool ShouldRender()
+{
+    Console.WriteLine("ShouldRender");
+    return true;
+}
+```
+
+## 5. OnAfterRender, OnAfterRenderAsync
+
+컴포넌트가 렌더링된 후 호출되며, DOM 업데이트 후 추가적인 로직 수행이 필요한 경우 사용합니다.
+자바스크립트 함수를 호출하거나 자바스크립트 라이브러리를 초기화하는 경우에 유용합니다.
+리렌더링의 경우 firstRender 파라미터가 false로 전달됩니다.
+
+```csharp
+protected override void OnAfterRender(bool firstRender)
+{
+    Console.WriteLine("OnAfterRender");
+}
+
+protected override async Task OnAfterRenderAsync(bool firstRender)
+{
+    Console.WriteLine("OnAfterRenderAsync");
+    await Task.CompletedTask;
+}
+```
+
+## 6. Dispose, DisposeAsync
+
+컴포넌트가 파괴될 때 호출되기 때문에, 사용한 리소스의 정리 작업을 진행하면 좋습니다.
+
+```csharp
+public void Dispose()
+{
+    Console.WriteLine("Dispose");
+}
+
+public async ValueTask DisposeAsync()
+{
+    Console.WriteLine("DisposeAsync");
+    await Task.CompletedTask;
+}
+```
+
+참고로, 리렌더링의 경우에는 SetParametersAsync, OnParametersSet, ShouldRender, OnAfterRender, Dispose의 순서로 호출됩니다,
+Async함수의 경우에는 각 동기 함수 호출 뒤 Async 함수가 호출되며, 비동기 함수의 처리가 완료되어야 다음 함수가 호출됩니다.

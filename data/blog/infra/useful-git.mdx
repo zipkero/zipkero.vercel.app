@@ -1,0 +1,327 @@
+---
+date: "2023-06-20"
+title: "git 명령어"
+tags: ["git"]
+summary: "자주 사용하는 git 명령어 모음"
+---
+
+### 명령어 모음
+
+1. 원격저장소로 브랜치 Push
+
+```bash
+git push <remoteName> <branchName>
+```
+
+2. 원격저장소 복제
+
+```bash
+git clone <remoteUrl>
+git clone <remoteUrl> <branchName>
+```
+
+3. 브랜치 생성 및 이동
+
+```bash
+# 브랜치 이동
+git checkout <branchName>
+# 브랜치 생성
+git checkout -b <branchName>
+# 원격저장소 기반의 브랜치 생성
+git checkout -b <branchName> <remoteName>/<branchName>
+
+# checkout의 기능이 방대하여 2.23버젼부터 아래와 같이 2개의 명령어로 분리되었다.
+# 브랜치 이동
+git switch <branchName>
+# 브랜치를 새로 만들면서 이동
+git switch -c <branchName>
+# 특정 커밋을 기반으로 한 브랜치를 새로 만들어 이동
+git switch -c <branchName> <HEAD>
+# 특정 원격브랜치를 기반으로 한 새로운 브랜치를 생성
+git switch -c <branchName> -t <remoteName>/<branchName>
+
+# 변경사항을 복구
+git restore .
+# 특정파일의 변경사항을 복구
+git restore <file>
+# 스테이징된 파일의 변경사항을 복구
+git restore --staged <file>
+# 특정 커밋의 파일이나 디렉토리만 복구
+# git restore --source=HEAD{n} <file | directory>
+git restore --source=HEAD index.js
+git restore --source=HEAD{2} ./src/components
+```
+
+4. 브랜치 삭제
+
+```bash
+git checkout <branchName>
+git branch -D <branchName>
+# 원격 브랜치 삭제 (보통은 remoteName = origin)
+git push -D <remoteName> <branchName>
+```
+
+5. 브랜치 리스트
+
+```bash
+git branch # 로컬 브런치 리스트
+git branch -r # 원격저장소 브런치 리스트
+git branch -a # 로컬+원격 브런치 리스트
+```
+
+6. 원격저장소 브랜치와 연결
+
+```bash
+git push -u <remoteName> <branchName>
+# 내 브랜치와 원격저장소 브랜치명이 다른 경우
+git push -u <remoteName> <branchName>:<remoteBranch>
+```
+
+7. 원격저장소 동기화(fetch + merge)
+
+```bash
+# pull = fetch + merge, fetch + rebase
+git pull origin <branchName>
+git pull --rebase <remoteName> <branchName>
+git pull --merge <remoteName> <branchName>
+
+# 커밋불러오기
+git fetch <remoteName> <branchName>
+
+# 원격저장소와 병합
+git merge <remoteName>/<branchName> # --squash 옵션을 추가하면 하나의 커밋으로 병합됨
+
+# master 에 branch 를 병합하고 싶다면
+git checkout master
+git git rebase <branchName>
+# 또는
+git merge <branchName> # --squash 옵션을 추가하면 하나의 커밋으로 병합됨
+
+git merge --no-commit --squash <branchName>
+# 커밋은 되지 않고 스테이징 상태로 남아있게 되므로 다른 브랜치 히스토리와 꼬일 일이 없음
+```
+
+8. 커밋 히스토리 확인
+
+```bash
+# 동기화
+git remote update
+
+# 로컬 커밋 히스토리 확인
+git log
+# 특정 브랜치 히스토리 확인
+git log <branchName>
+# 원격저장소 특정 브랜치의 히스토리 확인
+git log <remoteName>/<remoteBranchName>
+```
+
+9. 상태확인
+
+```bash
+git status
+```
+
+10. commit 하기
+
+```python
+git commit -m "커밋메시지"
+```
+
+11. 원격저장소 연결 추가, 삭제 및 업데이트
+
+```python
+git remote add <remoteName> <URL> # 추가
+git remote remove <remoteName> # 삭제
+git remote -v # 정보
+git remote update # 업데이트
+```
+
+12. commit, push 된 버전 지우기
+
+```bash
+git reset HEAD~1 # 몇개의 커밋을 날릴껀지 숫자로 지정
+git reset @ID # 특정버젼
+# 옵션
+# --hard 파일내용까지 취소
+# --mixed staged상태 되돌림
+# --soft add 상태로 되돌림
+# --merge 바로 이전 병합 취소
+```
+
+13. 변경사항 임시저장
+
+```bash
+# 임시저장
+git stash
+# 임시 저장 버전 적용(임시저장본은 삭제)
+git stash pop
+# 임시 저장 버전 적용(임시저장본은 유지)
+git stash apply
+# 임시 저장버전 삭제
+git stash drop
+# 저장된 리스트 확인
+git stash list
+```
+
+14. reset 등으로 인해 이전 커밋정보를 날린 경우 복구하기
+
+```bash
+git reflog
+# 아래와 같이 HEAD 변경 이력이 자세히 출력 됨
+
+# e266e7d (HEAD -> master, origin/master) HEAD@{0}: commit: simple data-downloader
+# 51fd6de HEAD@{1}: commit: sacanner 기반의 command line 프로그램
+# 0a1e120 HEAD@{2}: commit (initial): create project
+
+# cherry-pick 을 이용한 경우
+# git cherry-pick hash
+git cherry-pick 0a1e120
+
+# reset 을 이용한 경우
+# git reset HEAD{n}
+git reset HEAD{1}
+```
+
+15. 로컬변경사항 제거
+
+```bash
+git checkout .
+git clean -f
+```
+
+16. Git 인증 계정정보 캐시
+
+```bash
+git config --global credential.helper "cache --timeout 2592000"
+```
+
+17. 파일비교(기본 에디터를 vscode로 설정)
+
+```bash
+git diff <branchName> <otherBranch> # 로컬 브런치 간 비교
+git diff <branchName> <remoteName>/<branchName> # 로컬과 원격브런치 비교
+# --name-only 파일명만 확인
+git diff <branchName> <otherBranch> # 로컬 브런치 간 비교
+git diff <branchName> <remoteName>/<branchName> # 로컬과 원격브런치 비교
+# --name-only 파일명만 확인
+
+# git 에디터를 vscode 로 변경
+git config --global core.editor "code --wait"
+# config 파일 열기
+git config --global -e
+# config 수정
+[diff]
+	tool = vscode
+    prompt = false
+[difftool "vscode"]
+	cmd = "code --wait --diff $LOCAL $REMOTE"
+[difftool]
+    prompt = false
+# 파일비교
+git difftool <branchName> <remoteName>/<branchName>
+```
+
+18. rebase관련 글로벌 옵션 변경
+
+```bash
+# pull시에 기본적으로 rebase 사용
+git config --global branch.autosetuprebase always
+# 이미 적용되어 있는 브런치에도 적용
+git config branch.<branchName>.rebase true
+```
+
+19. commit 내역 합치기
+
+```bash
+# 최근부터 n개까지의 commit 을 합친다
+git rebase -i HEAD~{n}
+```
+
+20. 트래킹 브런치 변경
+
+```bash
+# 원격 기준 주소 변경
+git branch -u <remoteName>/<branchName>
+```
+
+21. Push 된 폴더 지우기
+
+```bash
+git rm -r --cached <folderPath>
+git commit -m <message>
+git push
+```
+
+### 오류
+
+1. SSL certificate problem: self signed certificate in certificate chain
+
+- SSL 인증서 문제로 인해 발생했기 때문에 인증서를 비활성화하고 재 시도
+
+```bash
+git config --global http.sslVerify false
+```
+
+2. The current branch master has no upstream branch
+
+- upstream 설정
+
+```bash
+git push -u origin master
+```
+
+- 전역 설정 변경
+
+```bash
+git config --global push.default current
+```
+
+3. HTTP Basic: Access denied
+
+- 계정정보 초기화 후 다시 시도
+
+```bash
+git config --system --unset credential.helper
+```
+
+- vs 에서 발생 시 아래와 같이 진행 후 시도
+- 제어판 - 사용자 계정 - 자격 증명 관리자 - 일반 자격증명(해당 git 계정 정보 편집)
+
+4. fetch / merge / full 오류 - Your local changes to the following files would be overwritten by merge
+
+- 수정된 버전이 있어서 발생했으므로 우선 로컬 수정버젼을 임시 저장 후 동기화 진행 그후 다시 복원
+
+```bash
+git stash
+
+git pull origin master
+
+git stash pop
+```
+
+5. Unable to access "URL" The requested URL returned error: 403
+
+- 권한없으니 권한 요청해야 함
+
+6. Updates were rejected because the tip of your current branch is behind
+
+- 원격저장소의 최신상태를 유지한 상태에서 push 를 진행
+
+```bash
+git pull --rebase
+git commit -m "내용"
+git push {remoteName} {branchName}
+
+# rebase를 하여 히스토리까 꼬여 안되는 경우가 발생할 수 있음
+# 강제 푸시
+git push --force <remoteName> <branchName>
+# 애초에 이 부분은 workflow방식을 제대로 정해야 한다.
+```
+
+7. refusing to merge unrelated histories
+
+- 원격저장소와는 관련 없이 로컬에 브랜치를 생성하여 push 하는 경우 전혀 상관없는 브랜치로 판단하여 오류가 발생하는 것으로써 두 브랜치를 병합할 수 있도록 허용
+
+```bash
+git pull origin <branchName> --allow-unrelated-histories
+```

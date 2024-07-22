@@ -1,0 +1,175 @@
+---
+date: "2023-08-18"
+title: ASP.NET Core 기반의 EF 모델 정의
+tags: ["dotnet", "efcore", "asp.net"]
+draft: false
+summary: "맥기반의 ASP.NET Core + EF Core + MS-SQL 설치부터 모델 정의까지"
+---
+
+## MS-SQL 설치
+
+1. 도커 이미지 가져오기
+
+```bash
+docker pull mcr.microsoft.com/azure-sql-edge
+```
+
+2. 도커 이미지 실행
+
+```zsh
+docker run -e "ACCEPT_EULA=1" -e 'MSSQL_SA_PASSWORD=1q2w3e!Q@W#E' -e "MSSQL_PID=Developer" -e "MSSQL_USER=SA" -p 1433:1433 -d --name=mssql mcr.microsoft.com/azure-sql-edge
+```
+
+## EF Core 모델 정의
+
+### 툴을 사용하여 정의
+
+1. DB 연결을 위한 프로젝트에 패키지 추가
+
+```csproj
+<Project Sdk="Microsoft.NET.Sdk">
+    ...
+    <ItemGroup>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="6.0.0" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="6.0.0" />
+    </ItemGroup>
+</Project>
+```
+
+2. dotnet-ef 도구 추가
+
+```zsh
+dotnet tool install --global dotnet-ef --version 6.0.0
+```
+
+3. Database Context와 Entity 클래스 생성
+
+`dotnet ef dbcontext scaffold` 명령어를 사용하여 데이터베이스 스키마를 기반으로 DbContext와 Entity 클래스를 생성합니다.
+
+```
+dotnet ef dbcontext scaffold 'Server=서버주소,1433;Database=데이터베이스;User Id=유저아이디;Password=패스워드' Microsoft.EntityFrameworkCore.SqlServer -o 출력위치 --namespace 네임스페이스 --context 컨텍스트명
+```
+
+- 테이블을 지정해서 스캐폴딩을 하고 싶다면 명령어에 `--table 테이블이름` 이런식으로 추가를 해주면 됩니다.
+
+### Fluent API
+
+- Entitiy 구성
+
+Fluent API 디자인 패턴을 사용하여 OnModelCreating 메소드 내에서 모델 구성이 이루어집니다.<br/>
+이 메소드는 모델 생성 시 EF Core에 의해 자동으로 호출됩니다. Fluent API를 사용하면 모델을 더 세밀하게 정의할 수 있습니다.
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+
+namespace CatProject.Entities;
+
+public class CatDbContext : DbContext
+{
+    public DbSet<Cat> Cats { get; set; }
+    public DbSet<Breed> Breeds { get; set; }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Cat>()
+            .HasKey(c => c.Id);
+
+        modelBuilder.Entity<Cat>()
+            .Property(c => c.Name)
+            .IsRequired()
+            .HasMaxLength(50);
+
+        modelBuilder.Entity<Cat>()
+            .HasOne(c => c.Breed)
+            .WithMany()
+            .HasForeignKey(c => c.BreedId);
+    }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        // 데이터베이스 연결 문자열 설정
+        optionsBuilder.UseSqlServer("Server=;Database=;User Id=;Password=;");
+    }
+}
+```
+
+### Data Annotations
+
+Data Annotations는 모델 클래스와 그 프로퍼티에 직접 메타데이터를 추가하는 방법으로 직관적이지만, Fluent API만큼 세밀한 설정은 불가능합니다.
+
+```csharp
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace CatProject.Entities;
+
+public class Cat
+{
+    [Key]
+    public int Id { get; set; }
+
+    [Required]
+    [MaxLength(50)]
+    public string Name { get; set; }
+
+    [ForeignKey("BreedId")]
+    public Breed Breed { get; set; }
+
+    public int BreedId { get; set; }
+}
+
+public class Breed
+{
+    [Key]
+    public int Id { get; set; }
+
+    [Required]
+    [MaxLength(50)]
+    public string Name { get; set; }
+}
+```
+
+- DbContext Configuration
+
+DbContext 클래스에서는 OnConfiguring 메소드를 오버라이드하여 데이터베이스 연결을 설정합니다.
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+
+namespace CatProject;
+
+public class CatDbContext : DbContext
+{
+    public DbSet<Cat> Cats { get; set; }
+    public DbSet<Breed> Breeds { get; set; }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        // 데이터베이스 연결 문자열 설정
+        optionsBuilder.UseSqlServer("Server=;Database=;User Id=;Password=;");
+    }
+}
+```
+
+- Startup Configuration
+
+ASP.NET Core 프로젝트에서는 Startup.cs의 ConfigureServices 메소드에서 AddDbContext를 호출하여 DbContext를 서비스 컨테이너에 등록합니다.
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace CatProject;
+
+public class Startup
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        // DbContext 설정
+        services.AddDbContext<CatDbContext>(options =>
+            options.UseSqlServer("Server=your_server;Database=your_database;User Id=your_user;Password=your_password;")
+        );
+        //...
+    }
+}
+```

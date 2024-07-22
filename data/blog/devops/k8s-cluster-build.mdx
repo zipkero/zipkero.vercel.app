@@ -1,0 +1,241 @@
+---
+date: "2023-08-15"
+title: 쿠버네티스 클러스터 구축
+tags: ["kubernetes"]
+draft: false
+summary: "쿠버네티스의 클러스터 구축 과정을 알아보자"
+---
+
+지금까지는 인텔 기반 맥북으로 VirtualBox와 Vagrant를 활용하여 클러스터 구축을 원활하게 진행하여 사용했었는데
+안타깝게도 커피를 흘려(ㅠㅠ) 수리비용이 200만원이 넘게 나와 새로운 맥북 실리콘 M을 구매하였습니다.<br/><br/>
+그런데 실리콘 M에서는 VirtualBox를 지원하지 않는 문제가 있었기에, Parallels로 대체하여 클러스터 구축을 진행하게 되었습니다.
+
+### 1. Parallels 설치
+
+![Parallels 에디션 비교](/static/images/k8s-cluster-build/parallels.png)
+
+Parallels는 Pro Edition 부터 Vagrant 를 지원하는데 어짜피 Parallels가 유료다보니 그냥 Pro Editon으로 구매하였습니다.<br/>
+[Parallels 다운로드 사이트](https://www.parallels.com/kr/)
+
+### 2. Vagrant 설치
+
+```bash
+brew install --cask vagrant
+```
+
+### 3. Vagrant Plugin 설치
+
+```bash
+vagrant plugin install vagrant-parallels
+```
+
+### 4. Vagrantfile 작성
+
+컨트롤플레인노드와 데이터플레인노드 2개로 구성하였으며, 이미지를 실리콘 맥에 맞게 arm64 으로 지정하였습니다.
+
+```Vagrantfile
+N = 2
+
+Vagrant.configure("2") do |config|
+  config.vm.boot_timeout = 3000
+
+  config.vm.define "master" do |master|
+    master.vm.box = "jharoian3/ubuntu-22.04-arm64"
+    master.vm.box_version = "0.3"
+    master.vm.network "private_network", ip: "192.168.56.10"
+    #master.vm.network "forwarded_port", guest: 22, host: 60010, auto_correct: true, id: "ssh"
+    master.vm.hostname = "master"
+
+    master.vm.provider "parallels" do |v|
+      v.memory = 2048
+      v.cpus = 2
+    end
+
+    master.vm.provision "shell", path: "master_env_build.sh", args: N
+  end
+
+  (1..N).each do |i|
+    config.vm.define "worker#{i}" do |worker|
+      worker.vm.box = "jharoian3/ubuntu-22.04-arm64"
+      worker.vm.box_version = "0.3"
+      worker.vm.network "private_network", ip: "192.168.56.1#{i}"
+      #worker.vm.network "forwarded_port", guest: 22, host: "6001#{i}", auto_correct: true, id: "ssh"
+      worker.vm.hostname = "worker#{i}"
+
+      worker.vm.provider "parallels" do |v|
+        v.memory = 1024
+        v.cpus = 1
+      end
+
+      worker.vm.provision "shell", path: "worker_env_build.sh", args: N
+    end
+  end
+end
+```
+
+### 5. 각각의 컨트롤플레인, 데이터플레인 노드에 맞게 프로그램설치를 위한 쉘스크립트 작성
+
+```shell
+#컨트롤플레인 전용 쉘스크립트
+#!/usr/bin/env bash
+
+swapoff -a
+sed -i '/swap/ s/^/#/' /etc/fstab
+
+cat <<-'EOF' >/etc/modules-load.d/kubernetes.conf
+br_netfilter
+EOF
+
+sudo modprobe br_netfilter
+
+cat <<-'EOF' >/etc/sysctl.d/kubernetes.conf
+net.bridge.bridge-nf-call-iptables = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+net.ipv4.ip_forward = 1
+EOF
+
+echo "192.168.56.10 master" >> /etc/hosts
+for (( i=1; i<=$1; i++  )); do echo "192.168.56.1$i worker$i" >> /etc/hosts; done
+
+cat <<EOF > /etc/resolv.conf
+nameserver 1.1.1.1 #cloudflare DNS
+nameserver 8.8.8.8 #Google DNS
+EOF
+
+sudo sysctl --system
+
+sudo apt-get update
+sudo apt-get install -y curl gnupg2 software-properties-common apt-transport-https ca-certificates
+
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmour -o /etc/apt/trusted.gpg.d/docker.gpg
+sudo add-apt-repository -y "deb [arch=arm64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+
+sudo apt-get update
+sudo apt-get install -y containerd.io
+
+containerd config default | sudo tee /etc/containerd/config.toml >/dev/null 2>&1
+sudo sed -i 's/SystemdCgroup \= false/SystemdCgroup \= true/g' /etc/containerd/config.toml
+
+sudo systemctl restart containerd
+sudo systemctl enable containerd
+
+cat <<-'EOF' >/etc/default/kubelet
+KUBELET_EXTRA_ARGS=--node-ip=192.168.56.10
+EOF
+
+sudo curl -fsSLo /etc/apt/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+sudo apt-get update
+sudo apt-get install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl
+
+OUTPUT_FILE=/vagrant/join.sh
+rm -rf $OUTPUT_FILE
+rm -rf /vagrant/.kube
+sudo kubeadm init --pod-network-cidr=10.244.0.0/16 --control-plane-endpoint=192.168.56.10 --apiserver-advertise-address=192.168.56.10
+sudo kubeadm token create --print-join-command > $OUTPUT_FILE
+chmod +x $OUTPUT_FILE
+
+mkdir -p $HOME/.kube
+sudo cp /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+cp -R $HOME/.kube /vagrant/.kube
+cp -R $HOME/.kube /home/vagrant/.kube
+sudo chown -R vagrant:vagrant /home/vagrant/.kube
+kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+kubectl completion bash >/etc/bash_completion.d/kubectl
+echo 'alias k=kubectl' >>/home/vagrant/.bashrc
+```
+
+- 컨트롤플레인에서는 kubeadm을 통해 클러스터를 구성하고 데이터플레인노드에 실햏시킬 파일을 생성합니다.
+
+```shell
+#데이터플레인 전용 쉘스크립트
+#!/usr/bin/env bash
+
+swapoff -a
+sed -i '/swap/ s/^/#/' /etc/fstab
+
+cat <<EOF >/etc/modules-load.d/kubernetes.conf
+br_netfilter
+EOF
+
+sudo modprobe br_netfilter
+
+cat <<-'EOF' >/etc/sysctl.d/kubernetes.conf
+net.bridge.bridge-nf-call-iptables = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+net.ipv4.ip_forward = 1
+EOF
+
+echo "192.168.56.10 master" >> /etc/hosts
+for (( i=1; i<=$1; i++  )); do
+echo "KUBELET_EXTRA_ARGS=--node-ip=192.168.56.1$i" >> /etc/default/kubelet
+echo "192.168.56.1$i worker$i" >> /etc/hosts;
+done
+
+cat <<EOF > /etc/resolv.conf
+nameserver 1.1.1.1 #cloudflare DNS
+nameserver 8.8.8.8 #Google DNS
+EOF
+
+sudo sysctl --system
+
+sudo apt-get update
+sudo apt-get install -y curl gnupg2 software-properties-common apt-transport-https ca-certificates
+
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmour -o /etc/apt/trusted.gpg.d/docker.gpg
+sudo add-apt-repository -y "deb [arch=arm64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+
+sudo apt-get update
+sudo apt-get install -y containerd.io
+
+containerd config default | sudo tee /etc/containerd/config.toml >/dev/null 2>&1
+sudo sed -i 's/SystemdCgroup \= false/SystemdCgroup \= true/g' /etc/containerd/config.toml
+
+sudo systemctl restart containerd
+sudo systemctl enable containerd
+
+sudo curl -fsSLo /etc/apt/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+sudo apt-get update
+sudo apt-get install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl
+```
+
+### 6. vagrant 실행
+
+```bash
+vagrant up --provider=parallels
+```
+
+- 프로파이더는 virtualbox가 기본으로 되어 있어 parallels로 지정하고 실행시킵니다.<br/>
+
+### 7. gpg key 오류
+
+apt에 올바르게 k8s 레파지토리를 등록했음에도 no_pubkey 에러가 발생해서 진행이 되지 않는 상황이 발생합니다.
+
+### 8. gpg key download url 변경
+
+[k8s gpg url issue](https://github.com/kubernetes/k8s.io/pull/4837) 와 동일한 문제로 보여 URL을 변경하여 진행하였습니다.
+
+```shell
+...
+# sudo curl -fsSLo /etc/apt/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
+sudo curl -fsSLo /etc/apt/keyrings/kubernetes-archive-keyring.gpg https://dl.k8s.io/apt/doc/apt-key.gpg
+...
+```
+
+### 9. 데이터플레인 환경 설정
+
+데이터플레인노드에서 /vagrant 폴더에 접속하게 되면 아래 내용과 비슷한 join.sh 이라는 쉘스크립트가 존재하며, 해당 파일을 실행시키면 컨트롤플레인에 연결되게 됩니다.
+
+```shell
+kubeadm join 192.168.56.10:6443 --token ... --discovery-token-ca-cert-hash sha256:...
+```
+
+### 10. 구축 완료
+
+지금까지의 과정이 완료되면 컨트롤 플레인에서 연결정보를 확인합니다.
+
+![구축완료](/static/images/k8s-cluster-build/k8s-cluster-builded.png)

@@ -1,0 +1,52 @@
+---
+date: "2023-06-26"
+title: Docker 빌드 시 환경변수 설정
+tags: ["docker", "github actions"]
+draft: false
+summary: "Github Actions 에서 Docker 빌드 시 환경변수 설정하는 방법"
+---
+
+부트캠프에서 진행한 프로젝트에서 백엔드 작업에서 초기에 DB접속정보를 하드코딩하고 작업하였고 CI/CD툴로 Github Actions를 사용하게 되면서 Github Secrets를 통해
+접속정보와 같은 민감한 정보를 환경변수로 처리하는 과정입니다.
+
+1. Github 프로젝트에서 Secret 환경변수 설정
+
+![Github Secret 설정](/static/images/docker-build-with-env/secrets.png)
+
+2. Github Actions 워크플로우 파일 중 환경변수 설정 부분
+
+```yaml
+- name: Build, tag, and push image to Amazon ECR
+  id: build-image
+  env:
+    AWS_COGNITO_USERPOOL_ID: ${{ secrets.AWS_COGNITO_USERPOOL_ID }}
+    MYSQL_CONNECTION_STRING: ${{ secrets.MYSQL_CONNECTION_STRING }}
+  run: |
+    # Build a docker container and
+    # push it to ECR so that it can
+    # be deployed to ECS.
+    docker build \
+    --build-arg "MYSQL_CONNECTION_STRING=$MYSQL_CONNECTION_STRING" \
+    --build-arg "AWS_COGNITO_USERPOOL_ID=$AWS_COGNITO_USERPOOL_ID" \
+```
+
+3. Dockerfile 설정
+
+```dockerfile
+FROM node:14-alpine
+
+WORKDIR /app
+
+ARG MYSQL_CONNECTION_STRING
+ARG AWS_COGNITO_USERPOOL_ID
+ENV MYSQL_CONNECTION_STRING=$MYSQL_CONNECTION_STRING
+ENV AWS_COGNITO_USERPOOL_ID=$AWS_COGNITO_USERPOOL_ID
+
+COPY package.json package-lock.json ./
+
+RUN npm install
+
+COPY . .
+
+CMD [ "npm", "start" ]
+```

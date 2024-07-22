@@ -1,0 +1,103 @@
+---
+date: "2023-08-20"
+title: ASP.NET Core HTTP 요청, 응답 프로세스
+tags: ["dotnet", "asp.net"]
+draft: false
+summary: "ASP.NET Core HTTP 요청, 응답 프로세스에 대한 정리"
+---
+
+### ASP.NET Core의 HTTP 요청, 응답 프로세스
+
+ASP.NET Core의 HTTP 요청, 응답 프로세스는 닷넷프레임워크 시절과 크게 다르지 않고, 여전히 유사한 프로세스를 사용하고 있습니다.
+
+1. HTTP 요청 수신
+
+   - 클라이언트와 TCP연결을 수립한 후 HTTP 요청을 수신하고 초기 파싱을 수행합니다.
+
+2. 미들웨어 파이프라인 (입력)
+
+   - 요청은 미들웨어 파이프라인을 통과하며 요청을 검사하거나 수정하는 과정을 진행합니다.
+   - 일반적으로 JWT 인증, 로깅, CORS 등의 작업들을 수행합니다.
+
+```csharp
+app.UseAuthentication();
+app.UseLogging();
+app.UseCors();
+```
+
+3. 라우팅
+
+   - 라우팅 엔진은 요청 URL, HTTP 메소드 등을 분석합니다.
+   - `[Route]`, `[HttpGet]`, `[HttpPost]` 등의 어트리뷰트를 사용하여 요청에 맞는 컨트롤러와 액션 메소드를 결정합니다.
+
+```csharp
+[Route("api/[controller]")]
+[ApiController]
+public class CatController : ControllerBase
+{
+    [HttpGet]
+    public ActionResult Get() { }
+}
+```
+
+4. 액션 필터 (전처리)
+
+   - 액션메소드가 실행 되기 전 발생함으로서, 일반적으로 인증 및 권한, 모델 유효성검사와 같은 작업을 수행합니다.
+   - 이 단계에서 요청을 거부하거나 추가 데이터를 설정할 수 있습니다.
+
+```csharp
+[Authorize]
+public ActionResult<IEnumerable<string>> Get() { }
+```
+
+5. 모델 바인딩
+
+   - `[FromBody]`, `[FromQuery]`, `[FromRoute]` 등의 어트리뷰트를 사용하여 요청 데이터를 액션 메소드의 매개변수로 바인딩합니다.
+   - 유효성 검사도 이 단계에서 수행될 수 있습니다.
+
+6. 액션 메소드 실행
+
+   - 요청에 맞게 결정된 액션 메소드가 실행됩니다.
+   - 이 메소드는 `ActionResult` 또는 파생된 타입 `OK(), NotFound(), BadRequest()`등을 반환합니다.
+
+7. 액션 필터 (후처리)
+
+   - 액션 메소드 실행 후 캐싱 설정, 추가 로깅등의 후처리 액션 필터가 실행됩니다.
+
+8. 결과 처리
+
+   - `ActionResult.ExecuteResultAsync()` 메소드가 호출되어 HTTP 응답 헤더와 본문을 설정합니다.
+
+9. 미들웨어 파이프라인 (출력)
+
+   - 생성된 응답이 미들웨어 파이프라인을 역순으로 통과합니다.
+
+10. HTTP 응답 전송
+
+    - 웹 서버가 HTTP 응답을 클라이언트에게 전송합니다.
+
+## Binding Source Attributes
+
+### FromBody
+
+HTTP 요청 본문의 데이터를 바인딩합니다.
+
+### FromForm
+
+HTTP 요청의 Form 데이터의 값을 바인딩합니다.
+
+### FromHeader
+
+HTTP 요청의 헤더의 값을 바인딩합니다.
+
+### FromQuery
+
+주로 GET 요청에서 사용되며, URL 쿼리 문자열의 값을 바인딩합니다.
+
+### FromRoute
+
+RestAPI에서 주로 사용되며, URL 경로의 값을 바인딩합니다.
+
+### FromService
+
+액션메소드에서 의존성 주입을 통해 서비스를 바인딩합니다.

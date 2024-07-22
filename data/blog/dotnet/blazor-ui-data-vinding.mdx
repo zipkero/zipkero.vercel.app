@@ -1,0 +1,165 @@
+---
+date: "2023-09-19"
+title: Blazor UI 양방향 데이터 바인딩
+tags: ["dotnet", "asp.net", "blazor"]
+draft: false
+summary: "Blazor UI 양방향 데이터 바인딩 구문 이모저모"
+---
+
+리액트의 경우에는 양방향 데이터 바인딩을 지원하지 않기에 아래와 같이 이벤트를 연결하여 값을 할당하는 방식으로 구현합니다.
+
+```jsx
+import React, { useState } from "react"
+
+export default function App() {
+  const [value, setValue] = useState("")
+
+  const handleChange = (e) => {
+    setValue(e.target.value)
+  }
+
+  return (
+    <div>
+      <input type="text" value={value} onChange={handleChange} />
+      <p>{value}</p>
+    </div>
+  )
+}
+```
+
+하지만, Blazor UI의 경우에는 양방향 데이터 바인딩을 지원하기에 아래와 같은 구문을 사용하여 간단하게 구현할 수 있습니다.
+
+## 1. `@bind`
+
+양방향 데이터 바인딩을 위한 가장 기본적인 구문으로, 암시적으로 value 속성에 바인딩됩니다.
+
+```razor
+<input @bind="propertyName" />
+
+@code {
+    private string propertyName { get; set; }
+}
+```
+
+## 2. `@bind:event`
+
+기본적으로 입력요소에 대한 이벤트는 oninput 이벤트에 바인딩되나, 이를 다른 DOM 이벤트에 바인딩하고 싶은 경우 사용합니다.<br/>
+예를 들면 사용자가 값을 입력하는 도중이 아닌 특정 키를 눌렀을 때 값을 바인딩하고 싶은 경우에 사용합니다.
+
+```razor
+<input @bind="propertyName" @bind:event="onchange" />
+```
+
+## 3. `@bind:get` / `@bind:set`
+
+@bind의 동작을 분리하여 캡슐화 하고자 할 때 사용하지만, 개인적으로는 속성을 할당한 @bind만으로도 충분하다고 생각됩니다.
+
+```razor
+<input @bind-value="propertyName" @bind:get="GetMethod" @bind:set="SetMethod" />
+
+@code {
+    private string propertyName;
+    private string GetMethod() => propertyName;
+    private void SetMethod(string value) => propertyName = value;
+}
+```
+
+## 4. `@bind:after`
+
+바인딩 된 항목의 값이 변경되고 난 후에 추가적인 로직을 실행하고자 할 때 사용합니다.
+
+```razor
+<input @bind="propertyName" @bind:after="AfterBindMethod" />
+
+@code {
+    private string propertyName { get; set; }
+
+    private void AfterBindMethod()
+    {
+        // 바인딩 후에 실행할 로직
+    }
+}
+```
+
+## 5. `@bind-{Attribute}`
+
+주로 부모와 자식 컴포넌트간의 특정 속성에 대한 양방향 데이터 바인딩을 지원하기 위해 사용합니다.
+
+```razor
+@page "/Main";
+
+<h3>Main</h3>
+
+<AlertText @bind-Text="Msg"/>
+<input type="text" @bind="Msg" @bind:event="oninput" />
+
+@code {
+    public string Msg { get; set; } = "";
+}
+```
+
+```razor:AlertText.razor
+<div class="alert alert-primary" role="alert">
+    @Text
+</div>
+
+@code {
+
+    [Parameter]
+    public string Text { get; set; } = "";
+
+    [Parameter]
+    public EventCallback<string> TextChanged { get; set; }
+
+}
+```
+
+## 6. `@bind-{Attribute}:event`
+
+`@bind-{Attribute}`를 사용하여 부모와 자식 컴포넌트끼리 양방향 데이터 바인딩을 구현하게 되면 자식 클래스에는
+`{Attribute}` 속성과 `{Attribute}Changed`라는 이름의 `EventCallback<T>` 타입의 이벤트를 생성해야 합니다.<br/>
+`@bind-{Attribute}:event` 구문은 부모 컴포넌트에 값을 변경하는 로직이 있는 경우 `{Attribute}Changed`라는 이름의 메소드를
+생성하고, 자식 컴포넌트에게 전달하여 자식 컴포넌트에서는 전달받은 이벤트를 발생시키는 로직을 구현해야 합니다.
+
+```razor
+@page "/Main";
+
+<h3>Main</h3>
+
+<AlertText @bind-Text="Msg" @bind-Text:event="TextChanged" />
+<input type="text" @bind="Msg" @bind:event="oninput" />
+
+@code {
+    public string Msg { get; set; } = "";
+
+    public void TextChanged(string value)
+    {
+        Msg = value;
+    }
+}
+```
+
+```razor:AlertText.razor
+<div class="alert alert-primary" role="alert" @oninput="UpdateText">
+    <input type="text" value="@Text"/>
+</div>
+
+@code {
+    [Parameter]
+    public string Text { get; set; }
+
+    [Parameter]
+    public EventCallback<string> TextChanged { get; set; }
+
+    private void UpdateText(ChangeEventArgs e)
+    {
+        Text = e.Value.ToString();
+        TextChanged.InvokeAsync(Text);
+    }
+
+}
+```
+
+---
+
+이 밖에도 `@bind:culture`, `@bind:format` 등의 구문이 있으나, 사용하기에 어려운 구문은 아니라 생략하였습니다.
