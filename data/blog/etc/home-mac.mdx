@@ -12,33 +12,29 @@ summary: "개인용 컴퓨터 클린설치 후 세팅 목록"
 - 크롬
 - node
 - go
-
+- dotnet sdk [https://learn.microsoft.com/ko-kr/dotnet/core/install/macos#make-net-available-system-wide]
 - dotnet [https://dotnet.microsoft.com/ko-kr/download/dotnet]
 - Jetbrain Toolbox
   - Goland
   - Webstorm
   - Rider
-  - Pycharm
   - Datagrip (선택)
 - CleanMyMac + (bartender4 or vanilla)
 - KakaoTalk
-- Docker
+- Docker or Podman
+- Chat GPT
 
 ### 선택
 
 - Pocket
-- Unity
 - Ridibooks
-- Notion
+- TickTick
+- Xmind
 - PostMan
 - Slack & Discord
-- Parelles or Virtual Box
-  - 애플 실리콘 계열은 현재까지는 Virtual Box, VMWare 에서 완벽히 지원이 되지 않는다.
-  - 지원하게 되면 Virtual Box로 갈아타자
 
 ## 윈도우
 
-- Multipass (맥에도 괜찮은가)
 - Wacom
 - PowerShell
 - PC Manager
@@ -84,25 +80,13 @@ brew install --cask iterm2
 
 - Visual Studio Code [https://code.visualstudio.com/]
 
-```bash
-brew install --cask visual-studio-code
-```
-
-- Aldente (클램쉘모드로 사용하면 설치)
-
-```bash
-brew install --cask aldente
-```
-
 - etc
 
 ```bash
 # tree
 brew install tree
-# 쿠버네티스 사용하면
-brew install kubernetes-cli
-# 테라폼 사용하면
-brew install terraform
+# podman
+brew install podman
 ```
 
 ## 설정
@@ -126,6 +110,7 @@ Host github.com
 ```
 alias k="kubectl"
 alias ll="ls -al"
+alias tf="terraform"
 ```
 
 - 맥북 대기상태 전력소모량 줄이기(ventura 부터는 사라진 것으로 보임)
