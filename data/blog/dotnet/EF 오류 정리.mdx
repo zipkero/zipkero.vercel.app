@@ -1,0 +1,122 @@
+---
+date: "2025-01-31"
+title: EF Core 오류 정리
+tags: ["dotnet", "efcore"]
+draft: false
+summary: "EF Core 사용 시에 발생한 오류 정리"
+---
+
+### 1. 마이그레이션 시 DI 서비스 등록 관련
+
+Entity 의 변경점이 있어 마이그레이션(dotnet ef database update)을 실행하였더니 아래와 같은 오류가 발생하였습니다.
+
+```
+An error occurred while accessing the Microsoft.Extensions.Hosting services.
+Continuing without the application service provider.
+
+Error: Some services are not able to be constructed
+(Error while validating the service descriptor
+'ServiceType: WebDeploy.Agent.Jobs.RollbackJob
+Lifetime: Scoped
+ImplementationType: WebDeploy.Agent.Jobs.RollbackJob':
+
+Unable to resolve service for type
+'WebDeploy.Core.JobManagement.TaskBuilder'
+while attempting to activate 'WebDeploy.Agent.Jobs.RollbackJob'.)
+
+(Error while validating the service descriptor
+'ServiceType: WebDeploy.Agent.Jobs.DeployJob
+Lifetime: Scoped
+ImplementationType: WebDeploy.Agent.Jobs.DeployJob':
+
+Unable to resolve service for type
+'WebDeploy.Core.JobManagement.TaskBuilder'
+while attempting to activate 'WebDeploy.Agent.Jobs.DeployJob'.)
+```
+
+IJob 을 구현한 Job 들은 아래처럼 별도의 팩토리에서 생성하고 있기 때문에 주입을 할 필요가 없는 상황이었으며,
+실제 프로그램 구동시에도 문제가 없어 초반 확인이 어려웠습니다.
+
+```csharp
+public class JobFactory<TInfo>(IServiceProvider serviceProvider) : IJobFactory<TInfo>
+    where TInfo : class
+{
+    public T Create<T>(TInfo info) where T : IJob<TInfo>
+    {
+        var taskBuilder = serviceProvider.GetRequiredService<TaskBuilder>();
+        var job = ActivatorUtilities.CreateInstance<T>(serviceProvider, taskBuilder, info);
+        return job;
+    }
+}
+```
+
+```csharp
+public class DeployJob : IJob<DeployInfo>
+{
+    public DeployInfo JobInfo { get; set; }
+    public ConcurrentQueue<IJobTask> Tasks { get; set; }
+    public ConcurrentQueue<ITaskInterceptor> TaskInterceptors { get; set; }
+    public DeployJob(TaskBuilder taskBuilder, DeployInfo info)
+    {
+        JobInfo = info;
+
+        Tasks = taskBuilder
+            .Build();
+    }
+}
+```
+
+원인은 dotnet ef가 실행될 때 IHost를 초기화하는 과정에서 IServiceCollection에 등록된
+모든 서비스를 DI 검증하기 때문에 발생한 오류였습니다.
+즉, IJob을 구현한 객체를 DI 컨테이너에 등록해 둔 것이 문제였는데, 이는 `ActivatorUtilities.CreateInstance`가
+오직 DI 컨테이너에 등록된 서비스만 반환한다고 잘못 이해했기 때문이었습니다.
+
+이 과정에서 알게 된 몇가지는 아래와 같습니다.
+
+1. `ActivatorUtilities.CreateInstance<T>(serviceProvider)`
+
+DI 컨테이너에 등록된 서비스만이 아닌 없는 경우는 새로 생성하여 반환한다.
+
+2. EF 명령어 사용 시 IHost 초기화
+
+IHost 를 초기화하기 떄문에 DI 컨테이너에 등록된 모든 서비스를 검증한다.
+
+3. 동적생성을 위한 생성자와 EF 전용 생성자를 구분해도 문제가 발생하지 않는다.
+
+```csharp
+public class DeployJob : IJob<DeployInfo>
+{
+    public DeployInfo JobInfo { get; set; }
+    public ConcurrentQueue<IJobTask> Tasks { get; set; }
+    public ConcurrentQueue<ITaskInterceptor> TaskInterceptors { get; set; }
+    // EF 전용 생성자
+    public DeployJob() {}
+    // 원래 생성자
+    public DeployJob(TaskBuilder taskBuilder, DeployInfo info)
+    {
+        JobInfo = info;
+
+        Tasks = taskBuilder
+            .Build();
+    }
+}
+```
+
+하지만, 결론은 아래처럼 별도의 초기화 메소드를 제공하는 것으로 마무리 되었습니다.
+
+```csharp
+public class JobFactory<TInfo>(IServiceProvider serviceProvider) : IJobFactory<TInfo>
+    where TInfo : class
+{
+    public T Create<T>(TInfo info) where T : IJob<TInfo>
+    {
+        var taskBuilder = serviceProvider.GetRequiredService<TaskBuilder>();
+        var job = ActivatorUtilities.CreateInstance<T>(serviceProvider);
+        job.Initialize(taskBuilder, info);
+        return job;
+    }
+}
+```
+
+IJob 의 경우 사용자가 구현해야 하는 클래스이기 떄문에 생성자 강제보다는 초기화 메소들를 강제하는게
+더 매끄럽다라고 판단했기 때문입니다.
