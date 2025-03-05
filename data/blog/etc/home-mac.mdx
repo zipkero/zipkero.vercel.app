@@ -1,7 +1,7 @@
 ---
 date: "2023-06-19"
-title: "컴퓨터 세팅"
-tags: ["mac", "windows"]
+title: "맥 세팅"
+tags: ["mac"]
 summary: "개인용 컴퓨터 클린설치 후 세팅 목록"
 ---
 
@@ -9,19 +9,45 @@ summary: "개인용 컴퓨터 클린설치 후 세팅 목록"
 
 ### 필수
 
+- xcode command line tools
+```bash
+xcode-select --install
+```
 - 크롬
+- iterm2
+```bash
+brew install --cask iterm2
+```
+- homebrew [https://brew.sh/index_ko]
 - node
+```bash
+brew install node
+```
 - go
-- dotnet sdk [https://learn.microsoft.com/ko-kr/dotnet/core/install/macos#make-net-available-system-wide]
-- dotnet [https://dotnet.microsoft.com/ko-kr/download/dotnet]
+```bash
+brew install go
+```
+- git
+```bash
+brew install -s git
+```
+- sdkman
 - Jetbrain Toolbox
   - Goland
   - Webstorm
   - Rider
+  - IntelliJ
   - Datagrip (선택)
-- CleanMyMac + (bartender4 or vanilla)
+- Visual Studio Code
+- BitDefender
+- (Runcat + AppCleaner) or CleanMyMac
 - KakaoTalk
 - Docker + Colima or Docker Desktop or Podman
+```
+brew install docker colima
+# or
+brew install podman
+```
 - Chat GPT
 
 ### 선택
@@ -31,62 +57,14 @@ summary: "개인용 컴퓨터 클린설치 후 세팅 목록"
 - TickTick
 - Xmind
 - PostMan
+- Upnote
 - Slack & Discord
-
-## 윈도우
-
-- Wacom
-- PowerShell
-- PC Manager
-- git
-
-```PowerShell
-winget install Git.Git
-```
-
-## 맥
-
-- xcode command line tools
-
-```bash
-xcode-select --install
-```
-
-- homebrew [https://brew.sh/index_ko]
-
-- node
-
-```bash
-brew install node
-```
-
-- go
-
-```bash
-brew install go
-```
-
-- git
-
-```bash
-brew install -s git
-```
-
-- iterm2
-
-```bash
-brew install --cask iterm2
-```
-
-- Visual Studio Code [https://code.visualstudio.com/]
-
+- dotnet sdk [https://learn.microsoft.com/ko-kr/dotnet/core/install/macos#make-net-available-system-wide]
+  - asdf로 관리하는 것도 괜찮을 듯
 - etc
-
 ```bash
 # tree
 brew install tree
-# podman
-brew install podman
 ```
 
 ## 설정
@@ -111,12 +89,4 @@ Host github.com
 alias k="kubectl"
 alias ll="ls -al"
 alias tf="terraform"
-```
-
-- 맥북 대기상태 전력소모량 줄이기(ventura 부터는 사라진 것으로 보임)
-
-```bash
-sudo pmset standbydelaylow 900 standbydelayhigh 1800
-# 실리콘 맥북은 기본적으로 0으로 설정되어 있는 듯 하다.
-# sudo pmset standbydelaylow 0 standbydelayhigh 0
 ```
